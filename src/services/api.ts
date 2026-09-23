@@ -318,3 +318,23 @@ export const getAdminDashboard = async (): Promise<AdminDashboard> => {
     };
   }
 };
+
+export const triggerScraping = async (pharmacyCode?: string): Promise<{ message: string }> => {
+  try {
+    const res = await client.post('/api/scraping/trigger', null, { params: { pharmacyCode } });
+    return res.data;
+  } catch (e) {
+    return { message: 'Scraping disparado en modo offline/simulación' };
+  }
+};
+
+export const api = {
+  getProducts,
+  getProductComparison,
+  getPharmacies,
+  getAdminDashboard,
+  triggerScraping
+};
+
+export default api;
+

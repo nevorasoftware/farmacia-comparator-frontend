@@ -183,19 +183,68 @@ export const CatalogPage: React.FC = () => {
         {/* Product Grid */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-            Cargando catálogo...
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              backgroundColor: 'rgba(25, 167, 160, 0.1)',
+              border: '1px solid rgba(25, 167, 160, 0.3)',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '999px',
+              color: 'var(--teal)',
+              fontWeight: 600,
+              fontSize: '0.95rem'
+            }}>
+              <span className="spinner-border" style={{
+                display: 'inline-block',
+                width: '18px',
+                height: '18px',
+                border: '2px solid currentColor',
+                borderRightColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 0.75s linear infinite'
+              }}></span>
+              {searchTerm 
+                ? `Buscando "${searchTerm}" en tiempo real en farmacias y normalizando con IA...` 
+                : 'Cargando catálogo de medicamentos...'}
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
             <Pill size={40} color="var(--text-muted)" style={{ marginBottom: '1rem' }} />
-            <h3 style={{ fontSize: '1.2rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>
-              No se encontraron medicamentos
+            <h3 style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
+              {searchTerm ? `No encontramos resultados exactos para "${searchTerm}"` : 'No se encontraron medicamentos'}
             </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              Intenta con otro término de búsqueda o limpia los filtros activos.
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '1.5rem', maxWidth: '500px', margin: '0 auto 1.5rem' }}>
+              Puedes buscar por principio activo o seleccionar una de las sugerencias más consultadas en El Salvador:
             </p>
+
+            {/* Suggestions Chips */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
+              {['Acetaminofén', 'Ibuprofeno', 'Amoxicilina', 'Loratadina', 'Losartán', 'Omeprazol', 'Metformina', 'Aspirina'].map(term => (
+                <button
+                  key={term}
+                  onClick={() => {
+                    setSearchTerm(term);
+                    setSearchParams({ q: term });
+                  }}
+                  className="btn btn-outline"
+                  style={{
+                    fontSize: '0.85rem',
+                    padding: '0.4rem 0.9rem',
+                    borderRadius: '999px',
+                    borderColor: 'var(--teal)',
+                    color: 'var(--teal)'
+                  }}
+                >
+                  🔍 {term}
+                </button>
+              ))}
+            </div>
+
             <button onClick={handleClearFilters} className="btn btn-primary">
-              Restablecer filtros
+              Ver Catálogo Completo
             </button>
           </div>
         ) : (

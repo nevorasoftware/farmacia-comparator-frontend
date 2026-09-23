@@ -105,18 +105,21 @@ const FALLBACK_PRODUCTS: ProductSearch[] = [
 export const getProducts = async (query?: string): Promise<ProductSearch[]> => {
   try {
     const res = await client.get('/api/products/search', { params: { q: query } });
-    if (res.data && res.data.length > 0) return res.data;
+    if (Array.isArray(res.data)) {
+      return res.data;
+    }
   } catch (e) {
     console.warn('Backend offline, using fallback products catalog');
+    if (!query) return FALLBACK_PRODUCTS;
+    const q = query.toLowerCase();
+    return FALLBACK_PRODUCTS.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.activeIngredient.toLowerCase().includes(q) ||
+      (p.brand && p.brand.toLowerCase().includes(q))
+    );
   }
 
-  if (!query) return FALLBACK_PRODUCTS;
-  const q = query.toLowerCase();
-  return FALLBACK_PRODUCTS.filter(p =>
-    p.name.toLowerCase().includes(q) ||
-    p.activeIngredient.toLowerCase().includes(q) ||
-    (p.brand && p.brand.toLowerCase().includes(q))
-  );
+  return FALLBACK_PRODUCTS;
 };
 
 export const getProductComparison = async (id: number): Promise<ProductComparison> => {

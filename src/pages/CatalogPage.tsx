@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { ProductSearch } from '../types';
 import { ProductCard } from '../components/ProductCard';
-import { Search, Filter, SlidersHorizontal, Pill, RotateCcw } from 'lucide-react';
+import { Search, Filter, SlidersHorizontal, Pill, RotateCcw, Sparkles } from 'lucide-react';
 
 export const CatalogPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -15,6 +15,19 @@ export const CatalogPage: React.FC = () => {
   const [selectedIngredient, setSelectedIngredient] = useState('');
   const [selectedForm, setSelectedForm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'price-asc' | 'price-desc'>('name');
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync state if URL query changes
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== searchTerm) {
+      setSearchTerm(q);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -30,6 +43,34 @@ export const CatalogPage: React.FC = () => {
     }
     fetchProducts();
   }, [searchTerm]);
+
+  // Handle autocomplete suggestions
+  useEffect(() => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const sugg = await api.getSuggestions(searchTerm.trim());
+        setSuggestions(sugg);
+      } catch (e) {
+        setSuggestions([]);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Extract unique active ingredients and forms for filters
   const ingredients = Array.from(new Set(products.map(p => p.activeIngredient))).filter(Boolean);
@@ -48,12 +89,32 @@ export const CatalogPage: React.FC = () => {
       return a.name.localeCompare(b.name);
     });
 
+  // Calculate similar products when exact search produces 0 results
+  const similarProducts = React.useMemo(() => {
+    if (filteredProducts.length > 0 || !searchTerm.trim()) return [];
+    const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(t => t.length >= 3);
+    if (tokens.length === 0) return [];
+    return products.filter(p => {
+      const pName = p.name.toLowerCase();
+      const pIng = (p.activeIngredient || '').toLowerCase();
+      const pBrand = (p.brand || '').toLowerCase();
+      return tokens.some(t => pName.includes(t) || pIng.includes(t) || pBrand.includes(t));
+    });
+  }, [filteredProducts, products, searchTerm]);
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    setSearchTerm(suggestion);
+    setSearchParams({ q: suggestion });
+    setShowSuggestions(false);
+  };
+
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedIngredient('');
     setSelectedForm('');
     setSortBy('name');
     setSearchParams({});
+    setShowSuggestions(false);
   };
 
   return (
@@ -75,15 +136,17 @@ export const CatalogPage: React.FC = () => {
             gap: '1rem',
             alignItems: 'center'
           }}>
-            {/* Search Input */}
-            <div style={{ position: 'relative' }}>
-              <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            {/* Search Input with Autocomplete */}
+            <div ref={searchContainerRef} style={{ position: 'relative' }}>
+              <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 2 }} />
               <input
                 type="text"
-                placeholder="Buscar por nombre o marca..."
+                placeholder="Buscar producto (ej. Ensure, Aspirina, MK)..."
                 value={searchTerm}
+                onFocus={() => setShowSuggestions(true)}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
+                  setShowSuggestions(true);
                   setSearchParams(e.target.value ? { q: e.target.value } : {});
                 }}
                 style={{
@@ -92,9 +155,52 @@ export const CatalogPage: React.FC = () => {
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '0.9rem',
-                  outline: 'none'
+                  outline: 'none',
+                  backgroundColor: 'white'
                 }}
               />
+
+              {/* Suggestions Dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '4px',
+                  backgroundColor: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid var(--border)',
+                  zIndex: 50,
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', backgroundColor: 'var(--bg-light)', borderBottom: '1px solid var(--border)' }}>
+                    Sugerencias de productos
+                  </div>
+                  {suggestions.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectSuggestion(item)}
+                      style={{
+                        padding: '0.6rem 0.75rem',
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        borderBottom: idx < suggestions.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(25, 167, 160, 0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <Sparkles size={14} color="var(--teal)" />
+                      <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Active Ingredient Filter */}
@@ -205,47 +311,79 @@ export const CatalogPage: React.FC = () => {
                 animation: 'spin 0.75s linear infinite'
               }}></span>
               {searchTerm 
-                ? `Buscando "${searchTerm}" en tiempo real en farmacias y normalizando con IA...` 
+                ? `Buscando "${searchTerm}" en tiempo real en Farmacias San Nicolás, Económicas, CEFAFA y Camila...` 
                 : 'Cargando catálogo de medicamentos...'}
             </div>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
-            <Pill size={40} color="var(--text-muted)" style={{ marginBottom: '1rem' }} />
-            <h3 style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
-              {searchTerm ? `No encontramos resultados exactos para "${searchTerm}"` : 'No se encontraron medicamentos'}
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '1.5rem', maxWidth: '500px', margin: '0 auto 1.5rem' }}>
-              Puedes buscar por principio activo o seleccionar una de las sugerencias más consultadas en El Salvador:
-            </p>
+          <div>
+            {/* If similar products exist */}
+            {similarProducts.length > 0 ? (
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{
+                  backgroundColor: 'rgba(25, 167, 160, 0.08)',
+                  border: '1px solid rgba(25, 167, 160, 0.25)',
+                  padding: '1.25rem',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '1.5rem'
+                }}>
+                  <h3 style={{ fontSize: '1.1rem', color: 'var(--primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                    <Sparkles size={18} color="var(--teal)" />
+                    Productos con nombres parecidos a "{searchTerm}":
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                    No hubo coincidencia exacta con todos los filtros, pero encontramos estos productos similares en las farmacias:
+                  </p>
+                </div>
 
-            {/* Suggestions Chips */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
-              {['Acetaminofén', 'Ibuprofeno', 'Amoxicilina', 'Loratadina', 'Losartán', 'Omeprazol', 'Metformina', 'Aspirina'].map(term => (
-                <button
-                  key={term}
-                  onClick={() => {
-                    setSearchTerm(term);
-                    setSearchParams({ q: term });
-                  }}
-                  className="btn btn-outline"
-                  style={{
-                    fontSize: '0.85rem',
-                    padding: '0.4rem 0.9rem',
-                    borderRadius: '999px',
-                    borderColor: 'var(--teal)',
-                    color: 'var(--teal)'
-                  }}
-                >
-                  🔍 {term}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '1.5rem'
+                }}>
+                  {similarProducts.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
+                <Pill size={40} color="var(--text-muted)" style={{ marginBottom: '1rem' }} />
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--primary)', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  {searchTerm ? `No encontramos resultados exactos para "${searchTerm}"` : 'No se encontraron medicamentos'}
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '1.5rem', maxWidth: '500px', margin: '0 auto 1.5rem' }}>
+                  Puedes probar seleccionando una de las sugerencias más consultadas en farmacias de El Salvador:
+                </p>
+
+                {/* Suggestions Chips with Ensure included */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
+                  {['Ensure', 'Aspirina', 'Acetaminofén', 'Ibuprofeno', 'Amoxicilina', 'Loratadina', 'Losartán', 'Omeprazol', 'Metformina'].map(term => (
+                    <button
+                      key={term}
+                      onClick={() => handleSelectSuggestion(term)}
+                      className="btn btn-outline"
+                      style={{
+                        fontSize: '0.85rem',
+                        padding: '0.4rem 0.9rem',
+                        borderRadius: '999px',
+                        borderColor: 'var(--teal)',
+                        color: 'var(--teal)',
+                        backgroundColor: term.toLowerCase() === 'ensure' ? 'rgba(25, 167, 160, 0.1)' : 'transparent',
+                        fontWeight: term.toLowerCase() === 'ensure' ? 700 : 500
+                      }}
+                    >
+                      🔍 {term}
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={handleClearFilters} className="btn btn-primary">
+                  Ver Catálogo Completo
                 </button>
-              ))}
-            </div>
-
-            <button onClick={handleClearFilters} className="btn btn-primary">
-              Ver Catálogo Completo
-            </button>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{

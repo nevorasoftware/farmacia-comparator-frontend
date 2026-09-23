@@ -14,7 +14,8 @@ import {
   ArrowRight,
   ExternalLink,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
@@ -24,7 +25,38 @@ export const HomePage: React.FC = () => {
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const POPULAR_SEARCHES = ['Acetaminofén', 'Ibuprofeno', 'Loratadina', 'Amoxicilina', 'Metformina', 'Losartán'];
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const POPULAR_SEARCHES = ['Ensure', 'Aspirina', 'Acetaminofén', 'Ibuprofeno', 'Loratadina', 'Amoxicilina', 'Metformina', 'Losartán'];
+
+  useEffect(() => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const sugg = await api.getSuggestions(searchTerm.trim());
+        setSuggestions(sugg);
+      } catch (e) {
+        setSuggestions([]);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -106,36 +138,89 @@ export const HomePage: React.FC = () => {
 
           {/* Search Form */}
           <form onSubmit={handleSearchSubmit} style={{ position: 'relative', marginBottom: '1.5rem' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: 'white',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.5rem 0.75rem',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)'
-            }}>
-              <Search size={22} color="var(--text-muted)" style={{ margin: '0 0.75rem' }} />
-              <input
-                type="text"
-                placeholder="Busca por nombre, principio activo (ej. Acetaminofén, Ibuprofeno, MK)..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: '1rem',
-                  color: 'var(--text-main)',
-                  padding: '0.5rem 0'
-                }}
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ padding: '0.75rem 1.75rem', fontSize: '1rem' }}
-              >
-                Buscar
-              </button>
+            <div ref={searchContainerRef} style={{ position: 'relative' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: 'white',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.5rem 0.75rem',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)'
+              }}>
+                <Search size={22} color="var(--text-muted)" style={{ margin: '0 0.75rem' }} />
+                <input
+                  type="text"
+                  placeholder="Busca por producto (ej. Ensure, Aspirina, Acetaminofén)..."
+                  value={searchTerm}
+                  onFocus={() => setShowSuggestions(true)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: '1rem',
+                    color: 'var(--text-main)',
+                    padding: '0.5rem 0'
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '0.75rem 1.75rem', fontSize: '1rem' }}
+                >
+                  Buscar
+                </button>
+              </div>
+
+              {/* Suggestions Dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '6px',
+                  backgroundColor: 'white',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 15px 30px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid var(--border)',
+                  zIndex: 50,
+                  overflow: 'hidden',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', backgroundColor: 'var(--bg-light)', borderBottom: '1px solid var(--border)' }}>
+                    Sugerencias rápidas
+                  </div>
+                  {suggestions.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        setSearchTerm(item);
+                        setShowSuggestions(false);
+                        navigate(`/medicamentos?q=${encodeURIComponent(item)}`);
+                      }}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        fontSize: '0.92rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        borderBottom: idx < suggestions.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        color: 'var(--text-main)'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(25, 167, 160, 0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <Sparkles size={15} color="var(--teal)" />
+                      <span style={{ fontWeight: 500 }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </form>
 

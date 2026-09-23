@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 8000
+  timeout: 25000
 });
 
 // Fallback seed data in case backend is loading or in offline mode
@@ -99,17 +99,77 @@ const FALLBACK_PRODUCTS: ProductSearch[] = [
     maxPrice: 4.80,
     pvmpSrs: 5.20,
     availablePharmaciesCount: 4
+  },
+  {
+    id: 9,
+    name: 'Ensure Advance Sabor Café 400g',
+    activeIngredient: 'Fórmula Polimérica Nutricional / Suplemento Alimenticio Completo',
+    concentration: '400 g',
+    pharmaceuticalForm: 'Polvo / Lata',
+    brand: 'Abbott',
+    laboratory: 'Abbott Laboratories',
+    healthRegistration: 'F078901234',
+    presentation: 'Lata x 400 g',
+    minPrice: 31.50,
+    maxPrice: 33.57,
+    pvmpSrs: 34.50,
+    availablePharmaciesCount: 4
+  },
+  {
+    id: 10,
+    name: 'Ensure Advance Vainilla 400g',
+    activeIngredient: 'Fórmula Polimérica Nutricional / Suplemento Alimenticio Completo',
+    concentration: '400 g',
+    pharmaceuticalForm: 'Polvo / Lata',
+    brand: 'Abbott',
+    laboratory: 'Abbott Laboratories',
+    healthRegistration: 'F078901235',
+    presentation: 'Lata x 400 g',
+    minPrice: 31.89,
+    maxPrice: 33.57,
+    pvmpSrs: 34.50,
+    availablePharmaciesCount: 3
   }
 ];
+
+export const getSuggestions = async (query: string): Promise<string[]> => {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const res = await client.get('/api/products/suggestions', { params: { q: query.trim() } });
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      return res.data;
+    }
+  } catch (e) {
+    // ignore
+  }
+  const q = query.toLowerCase();
+  return FALLBACK_PRODUCTS
+    .filter(p => p.name.toLowerCase().includes(q) || (p.brand && p.brand.toLowerCase().includes(q)))
+    .map(p => p.name)
+    .slice(0, 6);
+};
 
 export const getProducts = async (query?: string): Promise<ProductSearch[]> => {
   try {
     const res = await client.get('/api/products/search', { params: { q: query } });
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      return res.data;
+    }
+    // If backend returns empty list for query, check if any products match locally
+    if (Array.isArray(res.data) && res.data.length === 0 && query) {
+      const q = query.toLowerCase();
+      const localMatches = FALLBACK_PRODUCTS.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.activeIngredient.toLowerCase().includes(q) ||
+        (p.brand && p.brand.toLowerCase().includes(q))
+      );
+      if (localMatches.length > 0) return localMatches;
+    }
     if (Array.isArray(res.data)) {
       return res.data;
     }
   } catch (e) {
-    console.warn('Backend offline, using fallback products catalog');
+    console.warn('Backend query issue, using fallback products catalog');
     if (!query) return FALLBACK_PRODUCTS;
     const q = query.toLowerCase();
     return FALLBACK_PRODUCTS.filter(p =>
@@ -333,6 +393,7 @@ export const triggerScraping = async (pharmacyCode?: string): Promise<{ message:
 
 export const api = {
   getProducts,
+  getSuggestions,
   getProductComparison,
   getPharmacies,
   getAdminDashboard,
